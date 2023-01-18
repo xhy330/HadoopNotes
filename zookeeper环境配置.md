@@ -428,3 +428,549 @@ Zab协议有两种模式，它们分别是恢复模式（选主）和广播模�
 > 2.将落后的follower进行数据同步，并且加入到follower的队伍中
 
 ==**注意：进入恢复模式的时候，zookeeper是暂停对外服务的，新的leader会引导集群做上述的任务，只有当同步恢复的节点个数超过一半的时候才对外服务，其他未同步的节点继续保持同步即可。**==
+
+## 12. zookeeper的API使用
+
+### 12.1 基本操作API
+
+* **首先定义一个全局zookeeper的变量**
+
+  ```java
+  static ZooKeeper zooKeeper = null;
+  ```
+
+  
+
+* **创建构造函数**
+
+  ```java
+  public static void init() throws IOException {
+      zooKeeper = new ZooKeeper("nn1:2181,nn2:2181,s1:2181", 5000, new Watcher() {
+          @Override
+          public void process(WatchedEvent watchedEvent) {
+  
+          }
+      });
+  }
+  ```
+
+  第一个参数是需要连接的zookeeper的端口，第二个参数是最大连接时间，第三个是必须加的Watcher()，监听的时候会用到
+
+* **在main函数中来调用zookeeper的函数**
+
+  ```java
+  public static void main(String[] args) throws Exception {
+      init();
+  		// function();
+  }
+  ```
+
+  首先初始化zookeeper，然后开始调用其他的函数
+
+* **获取值：getData()**
+
+  ```java
+  byte[] data = zooKeeper.getData("/test_watch", false, null);
+  System.out.println(new String(data));
+  ```
+
+  * 参数1：目标文件夹，也就是路径
+
+  * 参数2：是否监听
+
+  * 参数3：是否打印详细信息。
+
+
+    ==**注意返回的结果是一个byte的数组，可以通过new String()来强转。**==
+
+* **创建节点：create()**
+
+  ```java
+  zooKeeper.create("/hainiu", "hainiu".getBytes(), ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
+  ```
+
+  * 参数1：目标文件夹
+  * 参数2：值，记得一定要转为Bytes类型
+  * 参数3：一个什么权限，设置为开发就行，zookeeper不需要设权
+  * 参数4：创建节点的类型，PERSISTENT就是永久类型，以此类推
+
+* **删除节点：delete()**
+
+  ```java
+  zooKeeper.delete("/hainiu", -1);
+  ```
+
+  * 参数1：目标文件夹
+  * 参数2：version版本，一般选择-1，表示所有的版本
+
+* **修改节点的值：setData()**
+
+  ```java
+  zooKeeper.setData("/test_watch", "hainiu".getBytes(), -1);
+  ```
+
+  * 参数1：目标文件夹
+  * 参数2：需要修改的值，注意是bytes类型
+  * 参数3：需要修改的版本，默认全部版本即可
+
+* **创建和遍历子节点**
+
+  ```java
+  zooKeeper.create("/parent", "parent".getBytes(), ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
+  zooKeeper.create("/parent/child1", "child1".getBytes(), ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
+  zooKeeper.create("/parent/child2", "child2".getBytes(), ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
+  
+  List<String> children = zooKeeper.getChildren("/parent", false);
+      for (String child : children) {
+          // System.out.println(child);
+          byte[] data = zooKeeper.getData("/parent/" + child, false, null);
+          System.out.println(new String(data));
+      }
+  ```
+
+
+
+**详细代码1：**
+
+```java
+package com.hainiu.zookeeper;
+
+import org.apache.zookeeper.*;
+
+import java.io.IOException;
+import java.util.List;
+
+public class Test01 {
+    static ZooKeeper zooKeeper = null;
+    public static void init() throws IOException {
+        zooKeeper = new ZooKeeper("nn1:2181,nn2:2181,s1:2181", 5000, new Watcher() {
+            @Override
+            public void process(WatchedEvent watchedEvent) {
+
+            }
+        });
+    }
+    public static void main(String[] args) throws Exception {
+        init();
+
+        // byte[] data = zooKeeper.getData("/test_watch", false, null);
+        // System.out.println(new String(data));
+
+        // zooKeeper.create("/hainiu", "hainiu".getBytes(), ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
+
+        // zooKeeper.delete("/hainiu", -1);
+
+        // zooKeeper.create("/tmp","tmp".getBytes(), ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL);
+
+        // zooKeeper.setData("/test_watch", "hainiu".getBytes(), -1);
+
+        // zooKeeper.create("/parent", "parent".getBytes(), ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
+        // zooKeeper.create("/parent/child1", "child1".getBytes(), ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
+        // zooKeeper.create("/parent/child2", "child2".getBytes(), ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT);
+
+        List<String> children = zooKeeper.getChildren("/parent", false);
+        for (String child : children) {
+            // System.out.println(child);
+            byte[] data = zooKeeper.getData("/parent/" + child, false, null);
+            System.out.println(new String(data));
+        }
+    }
+}
+
+```
+
+### 12.2 监听API
+
+```java
+public static void init() throws IOException {
+    zooKeeper = new ZooKeeper("nn1:2181,nn2:2181,s1:2181", 5000, new Watcher() {
+        @Override
+        public void process(WatchedEvent watchedEvent) {
+            // watcher
+            System.out.println(watchedEvent);
+        }
+    });
+}
+```
+
+跟普通API相比，只有exists、getChildren、getData有监听功能。exists监听文件夹的存在状况，getChildren监听子节点的状况，getData则是只监听值的变化。
+
+
+
+**具体代码：**
+
+```java
+package com.hainiu.zookeeper;
+
+import org.apache.zookeeper.WatchedEvent;
+import org.apache.zookeeper.Watcher;
+import org.apache.zookeeper.ZooKeeper;
+
+import java.io.IOException;
+import java.util.List;
+
+public class Test02 {
+    static ZooKeeper zooKeeper = null;
+    public static void init() throws IOException {
+        zooKeeper = new ZooKeeper("nn1:2181,nn2:2181,s1:2181", 5000, new Watcher() {
+            @Override
+            public void process(WatchedEvent watchedEvent) {
+                // watcher
+                System.out.println(watchedEvent);
+            }
+        });
+    }
+    public static void main(String[] args) throws Exception {
+        init();
+        // zooKeeper.exists("/parent/child1", true);
+        // zooKeeper.getChildren("/parent", true);
+        zooKeeper.getData("/parent", true, null);
+        Thread.sleep(Long.MAX_VALUE);
+    }
+}
+
+```
+
+## 13. zookeeper的使用场景
+
+### 13.1 集群管理
+
+每个加入集群的机器都创建一个节点，写入自己的状态。监控父节点的用户会收到通知，进行相应的处理。离开时session失效，节点删除，监控父节点的用户同样会收到通知。
+
+### 13.2 数据发布和订阅
+
+发布与订阅即所谓的配置管理，顾名思义就是将数据发布到ZK节点上，供订阅者动态获取数据，实现配置信息的集中式管理和动态更新。
+
+ 应用配置集中到znode上，应用启动时主动获取，并在znode上注册一个watcher，每次配置更新都会通知到应用。
+
+### 13.3 分布式锁
+
+**独享锁：**
+
+一个用户创建一个znode作为锁，另一个用户检测该znode，如果存在，代表别的用户已经锁住，如果不存在，则可以创建一个znode，代表拥有一个锁。就比如nn1与nn2，nn1激活以后，会在zookeeper中创建一个临时的znode，则nn2对这个znode进行监听，如果nn1挂了，nn2就会监听到该信息，然后重新再zookeeper中创建一个新的znode。==**多人抢椅子坐，谁坐在椅子上，谁就获取锁；离开椅子释放锁。可以理解为是上厕所，里面有人，外面的人就必须要等待。**==
+
+**时序锁(共享锁)：**
+
+有一个znode作为父节点，其底下是带有编号的子节点，所有要获取锁的用户，需要在父节点下创建带有编号的子节点，编号最小的会持有锁；当最小编号的节点被删除后，锁被释放，再重新找最小编号的节点来持有锁，这样保证了全局有序，注意节点是临时有序的，整完了以后就会被释放，然后重新检索最小的编号的节点。==**看谁先创建，谁先创建，谁就获取锁。可以理解为吃海底捞，先拿号，然后去逛街，回来看看海底捞排到哪儿了，不需要一直等待。**==
+
+## 14. 客户端在zookeeper上注册节点
+
+**具体代码：**
+
+```java
+package com.hainiu.zookeeper;
+
+import org.apache.zookeeper.*;
+
+import java.io.IOException;
+
+public class ClientRegist {
+    private String name;
+    public ClientRegist(String name){
+        this.name = name;
+    }
+
+    private ZooKeeper zookeeper = null;
+    private static final String url = "nn1:2181,nn2:2181,s1:2181";
+    private static final int timeout = 5000;
+    public void init() throws Exception {
+        zookeeper = new ZooKeeper(url, timeout, new Watcher() {
+            @Override
+            public void process(WatchedEvent watchedEvent) {
+
+            }
+        });
+    }
+
+    public void regist() throws Exception{
+        zookeeper.create("/servers/" + this.name, this.name.getBytes(), ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL);
+        Thread.sleep(Long.MAX_VALUE);
+    }
+
+    public static void main(String[] args) throws Exception{
+        ClientRegist s2 = new ClientRegist("s3");
+        s2.init();
+        s2.regist();
+    }
+}
+
+```
+
+## 15. 监听zookeeper上的节点
+
+**具体代码：**
+
+```java
+package com.hainiu.zookeeper;
+
+import org.apache.zookeeper.WatchedEvent;
+import org.apache.zookeeper.Watcher;
+import org.apache.zookeeper.ZooKeeper;
+
+import java.util.List;
+
+public class ServerListen {
+    private static ZooKeeper zooKeeper = null;
+    private static final String url = "nn1:2181,nn2:2181,s1:2181";
+    private static final int timeout = 5000;
+    private static void init() throws Exception{
+        zooKeeper = new ZooKeeper(url, timeout, new Watcher() {
+            @Override
+            public void process(WatchedEvent watchedEvent) {
+                // ?????
+                if(watchedEvent.getType().equals(Event.EventType.NodeChildrenChanged) && watchedEvent.getPath().startsWith("/servers")){
+                    try {
+                        getServers();
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+            }
+        });
+    }
+
+    private static void getServers() throws Exception{
+        List<String> children = zooKeeper.getChildren("/servers", true);
+        System.out.println("???????????");
+        for (String child : children) {
+            System.out.println(child);
+        }
+        System.out.println("==================");
+    }
+
+    public static void main(String[] args) throws Exception{
+        init();
+        getServers();
+        Thread.sleep(Long.MAX_VALUE);
+    }
+}
+
+```
+
+## 16. 监听zookeeper上的配置文件
+
+**具体代码：**
+
+```java
+package com.hainiu.zookeeper;
+
+import org.apache.zookeeper.WatchedEvent;
+import org.apache.zookeeper.Watcher;
+import org.apache.zookeeper.ZooKeeper;
+
+public class ConfigListen {
+    private static ZooKeeper zooKeeper = null;
+    private static final String url = "nn1:2181,nn2:2181,s1:2181";
+    private static final int timeout = 5000;
+
+    private void init() throws Exception{
+        zooKeeper = new ZooKeeper(url, timeout, new Watcher() {
+            @Override
+            public void process(WatchedEvent watchedEvent) {
+                if(watchedEvent.getType().equals(Event.EventType.NodeDataChanged) && watchedEvent.getPath().equals("/config")){
+                    try {
+                        getConfig();
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+            }
+        });
+    }
+
+    private void getConfig() throws Exception{
+        byte[] data = zooKeeper.getData("/config", true, null);
+        String config = new String(data);
+        String[] strs = config.split("\\*");
+        System.out.println("username:"+strs[0]+"  passwd: "+strs[1]);
+    }
+
+    public static void main(String[] args) throws Exception{
+        ConfigListen s3 = new ConfigListen();
+        s3.init();
+        s3.getConfig();
+        Thread.sleep(Long.MAX_VALUE);
+    }
+}
+
+```
+
+## 17. 独享锁与共享锁的实现
+
+### 17.1 独享锁
+
+**具体代码：**
+
+```java
+package com.hainiu.zookeeper;
+
+import org.apache.zookeeper.*;
+
+import java.security.Signature;
+
+public class SingleLock {
+    private String name;
+    public SingleLock(String name){
+        this.name = name;
+    }
+    private ZooKeeper zooKeeper = null;
+    private static final String prefix = "/lock/HA";
+    private static final String url = "nn1:2181,nn2:2181,s1:2181";
+    private static final int timeout = 5000;
+
+    private void init() throws Exception{
+        zooKeeper = new ZooKeeper(url, timeout, new Watcher() {
+            @Override
+            public void process(WatchedEvent watchedEvent) {
+                if(watchedEvent.getType().equals(Event.EventType.NodeDeleted) && watchedEvent.getPath().equals(prefix)){
+                    try {
+                        getLock();
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+            }
+        });
+    }
+
+    private void getLock()throws Exception{
+        try {
+            zooKeeper.create(prefix, name.getBytes(), ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL);
+            System.out.println("get lock, I am active, my name is "+this.name);
+        }catch (KeeperException.NodeExistsException e){
+            zooKeeper.exists(prefix, true);
+            System.out.println("not get lock, my name is "+this.name);
+        }
+
+    }
+
+    public static void main(String[] args) throws Exception{
+        SingleLock nn1 = new SingleLock("nn1");
+        nn1.init();
+        nn1.getLock();
+        Thread.sleep(Long.MAX_VALUE);
+    }
+
+}
+
+```
+
+
+
+### 17.2 共享锁
+
+**具体代码：**
+
+```java
+package com.hainiu.zookeeper;
+
+import org.apache.zookeeper.*;
+
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
+
+/**
+ * 创建的节点是-e -s的节点
+ * 1.如果队列中只有自己的话，直接执行自己要做的就行
+ * 2.如果队列中还有很多人排队的话，看看自己是不是最小的
+ * 3.如果自己不是最小的，那么就监听前一个人
+ */
+public class ShareLock {
+    // 先准备好zookeeper变量
+    private ZooKeeper zookeeper = null;
+  
+    // 记录lock的位置
+    private static final String lock_path = "/lock";
+  
+    // 需要创建的临时序列节点
+    // /lock/order000000001
+    private static final String prefix = "/lock/order";
+    
+    // 为了后续节点的比对，设置一个my_order变量来存储自己的节点
+    private String my_order = null;
+  
+    // zookeeper的初始化函数
+    private void init() throws Exception{
+        zookeeper = new ZooKeeper(Constance.url, Constance.timeout, new Watcher() {
+            @Override
+            public void process(WatchedEvent watchedEvent) {
+                // 如果你监听的前一个节点消失了，则就开始检查锁
+                if(watchedEvent.getType().equals(Event.EventType.NodeDeleted) && watchedEvent.getPath().startsWith(lock_path)){
+                    try {
+                        check_lock();
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                }
+            }
+        });
+    }
+  
+    // 初始化锁
+    private void init_lock() throws Exception{
+        // 记录自己节点的信息，节点的值倒是无所谓，主要是序号
+        my_order = zookeeper.create(prefix,null, ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.EPHEMERAL_SEQUENTIAL);
+    }
+    
+    // work函数是节点工作的函数，后续替换
+    private void work()throws Exception{
+        System.out.println("获取到共享锁，我的编号是:"+this.my_order);
+        
+        // 工作的时间
+        Thread.sleep(10*1000);
+      
+      	// 不能一直占用，用完就退出
+        System.exit(1);
+    }
+
+  	// 检查锁的状态，三个规则
+    private void check_lock()throws Exception{
+      	// 获取lock下的锁
+        List<String> children = zookeeper.getChildren(lock_path, false);
+        if(children.size() == 1){
+            // 只有一个锁，那肯定是我自己
+            work();
+        }else{
+            // order000000001
+            // order000000002
+            // order000000003
+            //my_order = /lock/orderxxxxxx
+          
+          	// 对所有的子节点进行排序，也就是等待的节点
+            Collections.sort(children);
+          	
+          	// 对my_order字符串进行切割，只剩下orderxxxxxx部分，方便后续的比对
+            String myorder = my_order.substring(lock_path.length() + 1);
+          	
+          	// 获取最小的序号的节点
+            String order_0 = children.get(0);
+            if(myorder.equals(order_0)){
+                // 我是最小的，那么我就可以用锁啦
+                work();
+            }else{
+              	// 我是第几个
+                int myindex = children.indexOf(myorder); 
+              
+              	// 获取我前面一个节点的信息
+                String my_head_order = children.get(myindex - 1); 
+              
+              	// 将它拼接成全路径，然后进行监听
+                zookeeper.exists(lock_path+"/"+my_head_order,true);
+              
+                System.out.println("没有获取到锁，正在等待中");
+            }
+        }
+    }
+
+    public static void main(String[] args) throws Exception{
+        ShareLock l1 = new ShareLock();
+        l1.init();
+        l1.init_lock();
+        l1.check_lock();
+        Thread.sleep(Long.MAX_VALUE);
+    }
+}
+
+```
+
